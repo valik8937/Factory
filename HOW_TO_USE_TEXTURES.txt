@@ -1,0 +1,147 @@
+================================================================================
+  HOW TO USE TEXTURES FROM Simple Texture Editor
+================================================================================
+
+The editor saves standard PNG files with an extra "zTXt" chunk that stores
+sub-texture (sprite slicing) metadata. Any program that reads PNG can display
+the image normally -- the extra data is invisible and does not break anything.
+
+To extract the metadata you need to read the "zTXt" chunk with the keyword
+"SimpleTextureEditor" and decompress it with zlib (DEFLATE).
+
+================================================================================
+  METADATA FORMAT (JSON inside the zTXt chunk)
+================================================================================
+
+{
+  "version": 2,
+  "subTextures": [
+    { "name": "head",  "x": 0,  "y": 0,  "w": 32, "h": 32 },
+    { "name": "body",  "x": 32, "y": 0,  "w": 32, "h": 48 },
+    { "name": "legs",  "x": 64, "y": 0,  "w": 16, "h": 32 }
+  ],
+  "palette": [
+    { "r": 255, "g": 0,   "b": 0,   "a": 255, "name": "Red"   },
+    { "r": 0,   "g": 255, "b": 0,   "a": 255, "name": "Green" }
+  ]
+}
+
+- "subTextures"  : array of named rectangles (x, y, width, height)
+- "palette"      : optional array of colours (may be empty)
+
+================================================================================
+  HOW TO PARSE – RECIPES FOR COMMON LANGUAGES / ENGINES
+================================================================================
+
+--- Python (Pillow + zlib) ---
+
+import json, zlib
+from PIL import Image
+
+def load_ste_metadata(path):
+    """Return (image, sub_textures_list)."""
+    with open(path, "rb") as f:
+        data = f.read()
+
+    img = Image.open(path)
+
+    # Find "SimpleTextureEditor" zTXt chunk in raw PNG
+    # Quick way: use Pillow's .info which reads tEXt/zTXt chunks
+    # (Pillow automatically decompresses zTXt to text)
+    raw_text = img.info.get("SimpleTextureEditor")
+    if raw_text:
+        meta = json.loads(raw_text)
+        return img, meta.get("subTextures", [])
+
+    return img, []
+
+# Usage:
+img, regions = load_ste_metadata("my_sprite.png")
+for r in regions:
+    sub = img.crop((r["x"], r["y"], r["x"]+r["w"], r["y"]+r["h"]))
+    print(f"  {r['name']}: {r['w']}x{r['h']} at ({r['x']},{r['y']})")
+    # sub.save(f"{r['name']}.png")
+
+
+--- C++ (Qt6 + zlib) ---
+
+See src/PNGHandler.cpp in this project -- the method
+PNGHandler::extractZtxt() shows exactly how to scan PNG chunks,
+find the zTXt with keyword "SimpleTextureEditor", and decompress
+with raw zlib::uncompress().
+
+
+--- Godot Engine 4 ---
+
+var image = Image.new()
+image.load("res://my_sprite.png")
+
+# Read the metadata string from the image
+var meta_str = image.get_meta("SimpleTextureEditor")
+if meta_str:
+    var meta = JSON.parse_string(meta_str)
+    for region in meta["subTextures"]:
+        var atlas = AtlasTexture.new()
+        atlas.atlas = ImageTexture.create_from_image(image)
+        atlas.region = Rect2(region["x"], region["y"], region["w"], region["h"])
+        print("Sub-texture: ", region["name"], " -> ", atlas.region)
+
+
+--- Unity (C#) ---
+
+// Unity's Texture2D does not expose zTXt chunks directly.
+// You need to read the PNG file as raw bytes, scan for the zTXt chunk,
+// decompress with DeflateStream, then parse JSON.
+
+using System.IO;
+using System.IO.Compression;
+using UnityEngine;
+
+public static class STELoader {
+    public static SubTextureData[] Load(string path) {
+        byte[] png = File.ReadAllBytes(path);
+
+        // Load image normally
+        Texture2D tex = new Texture2D(2, 2);
+        tex.LoadImage(png);
+
+        // Find "SimpleTextureEditor" zTXt chunk
+        string json = ExtractZtxt(png, "SimpleTextureEditor");
+        if (json == null) return new SubTextureData[0];
+
+        // Parse
+        var root = JsonUtility.FromJson<STERoot>(json);
+        return root.subTextures;
+    }
+
+    // (chunk scanning + zlib decompress omitted for brevity --
+    //  see PNGHandler.cpp for the algorithm)
+}
+
+
+--- Unreal Engine (C++) ---
+
+Use FPNGHelper (or stb_image) to load the PNG, then use the engine's
+zlib (FCompression::UncompressMemory) to decompress the zTXt chunk.
+
+================================================================================
+  WHY "zTXt" AND NOT JUST "tEXt"?
+================================================================================
+
+- tEXt stores uncompressed Latin-1 text (max ~2 GB but impractical for JSON)
+- zTXt uses standard zlib/DEFLATE compression → compact, any decoder can read it
+- The chunk is placed right before IEND, so it does not interfere with any
+  PNG reader (browsers, image viewers, game engines all ignore unknown chunks)
+
+================================================================================
+  EXPORT TIP
+================================================================================
+
+After editing your spritesheet and defining sub-texture regions,
+press "Export" in the editor. The editor writes:
+
+  1. my_sprite.png      ← image + zTXt metadata
+  2. my_sprite.json     ← plain JSON with frame data (no PNG parsing needed!)
+
+The .json file is the simplest way to consume metadata if you do not
+want to parse the PNG chunks directly.
