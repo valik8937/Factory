@@ -4,22 +4,18 @@ using System.Threading;
 
 namespace Factory;
 
-
 public class WorldManager
 {
     private readonly Dictionary<long, Chunk> _chunks = new();
     private readonly object _lock = new();
-    
-    // Фоновий потік для завантаження
+
     private Thread _loaderThread;
     private bool _isRunning = false;
-    
-    // Позиція гравця у координатах чанків, оновлюється з основного потоку
+
     private int _playerChunkX = 0;
     private int _playerChunkY = 0;
-    
-    // Радіус завантаження чанків навколо гравця
-    private const int LoadRadius = 4;
+
+    private const int LoadRadius = GameConfig.LoadRadius;
 
     public void Start()
     {
@@ -47,21 +43,19 @@ public class WorldManager
     {
         int tileX = (int)Math.Floor(worldX / tileSize);
         int tileY = (int)Math.Floor(worldY / tileSize);
-        
+
         lock (_lock)
         {
-            _playerChunkX = tileX >> 4; // Ділимо на 16 (розмір чанку)
+            _playerChunkX = tileX >> 4;
             _playerChunkY = tileY >> 4;
         }
     }
 
-    // Отримання унікального ключа для словника з координат чанку
     public static long GetChunkKey(int cx, int cy)
     {
         return ((long)cx << 32) | ((long)(uint)cy);
     }
 
-    // Фонова функція потоку
     private void UpdateLoader()
     {
         while (_isRunning)
@@ -75,7 +69,6 @@ public class WorldManager
 
             bool generatedAny = false;
 
-            // Перевіряємо чанки навколо гравця
             for (int dy = -LoadRadius; dy <= LoadRadius; dy++)
             {
                 for (int dx = -LoadRadius; dx <= LoadRadius; dx++)
@@ -94,24 +87,20 @@ public class WorldManager
 
                     if (!exists)
                     {
-                        // Генеруємо чанк
                         Chunk newChunk = GenerateChunk(cx, cy);
-                        
+
                         lock (_lock)
                         {
                             _chunks[key] = newChunk;
                         }
-                        
+
                         Console.WriteLine($"[Thread] Chunk generated: ({cx}, {cy})");
                         generatedAny = true;
-                        
-                        // Робимо невеличку паузу, щоб не перевантажувати процесор
-                        Thread.Sleep(10); 
+                        Thread.Sleep(10);
                     }
                 }
             }
 
-            // Очищення далеких чанків (поза радіусом LoadRadius + 2)
             if (!generatedAny)
             {
                 List<long> keysToRemove = new List<long>();
@@ -136,32 +125,27 @@ public class WorldManager
                 {
                     Console.WriteLine($"[Thread] Unloaded {keysToRemove.Count} distant chunks.");
                 }
-                
-                // Якщо нових чанків не виявлено, спимо довше
-                Thread.Sleep(100); 
+
+                Thread.Sleep(100);
             }
         }
     }
 
-    // Проста генерація чанку (наповнення землею)
     private Chunk GenerateChunk(int cx, int cy)
     {
         var chunk = new Chunk(cx, cy);
 
-        // Наповнюємо шар 0 (земля) візерунком сітки
         for (int y = 0; y < Chunk.Size; y++)
         {
             for (int x = 0; x < Chunk.Size; x++)
             {
-                // Визначаємо світові координати тайлу
                 int gx = (cx << 4) + x;
                 int gy = (cy << 4) + y;
-                
-                // Робимо шаховий візерунок для трави/землі (тип тайлу 2 або 3)
-                int tileType = ((gx + gy) % 2 == 0) ? 2 : 3;
+
+                // Шаховий візерунок: tile ID 1 або 2 (обидва використовують "grass1")
+                int tileType = ((gx + gy) % 2 == 0) ? 1 : 2;
                 chunk.SetTile(x, y, 0, tileType);
-                
-                // За замовчуванням інші шари пусті (0)
+
                 chunk.SetTile(x, y, 1, 0);
                 chunk.SetTile(x, y, 2, 0);
             }
@@ -172,14 +156,13 @@ public class WorldManager
 
     public int GetTile(int gx, int gy, int z)
     {
-        // Перетворюємо світові координати тайлів у координати чанку
         int cx = gx >> 4;
         int cy = gy >> 4;
         int tx = gx & 15;
         int ty = gy & 15;
 
         long key = GetChunkKey(cx, cy);
-        
+
         lock (_lock)
         {
             if (_chunks.TryGetValue(key, out Chunk chunk))
@@ -187,7 +170,7 @@ public class WorldManager
                 return chunk.GetTile(tx, ty, z);
             }
         }
-        return 0; // Якщо чанк не завантажений, вважаємо тайл порожнім
+        return 0;
     }
 
     public void SetTile(int gx, int gy, int z, int tileType)
@@ -208,7 +191,6 @@ public class WorldManager
         }
     }
 
-    // Метод для малювання чанків (рендеринг певного шару Z)
     public List<Chunk> GetActiveChunksCopy()
     {
         lock (_lock)

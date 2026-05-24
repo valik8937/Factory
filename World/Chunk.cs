@@ -1,16 +1,13 @@
 namespace Factory;
 
-
 public struct Chunk
 {
-    public const int Size = 16; // 16x16 клітинок
-    public const int Layers = 3; // 0 - земля, 1 - перешкоди, 2 - декор зверху
+    public const int Size = GameConfig.ChunkSize;
+    public const int Layers = GameConfig.ChunkLayers;
     public const int TotalTiles = Size * Size * Layers;
 
     public int ChunkX { get; }
     public int ChunkY { get; }
-    
-    // Плоский масив для тайлів
     public int[] Tiles { get; }
 
     public Chunk(int chunkX, int chunkY)
@@ -20,10 +17,8 @@ public struct Chunk
         Tiles = new int[TotalTiles];
     }
 
-    // Хелпер для перерахунку 3D координат у 1D індекс
     public static int GetIndex(int x, int y, int z)
     {
-        // x: 0..15, y: 0..15, z: 0..Layers-1
         return (z * Size * Size) + (y * Size) + x;
     }
 
@@ -41,4 +36,9 @@ public struct Chunk
             Tiles[GetIndex(x, y, z)] = tileType;
         }
     }
+
+    /// <summary>
+    /// Перевіряє, чи тайл на шарі 1 має колізію (дивиться в TileRegistry).
+    /// </summary>
+    public static bool IsSolid(int tileId) => TileRegistry.HasCollision(tileId);
 }

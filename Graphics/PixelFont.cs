@@ -4,15 +4,12 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace Factory;
 
-
 public static class PixelFont
 {
     private static readonly Dictionary<char, byte[]> Glyphs = new();
 
     static PixelFont()
     {
-        // 5x7 шрифт. Кожен рядок закодовано у вигляді 5 біт (byte)
-        // Цифри
         Glyphs['0'] = new byte[] { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E };
         Glyphs['1'] = new byte[] { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E };
         Glyphs['2'] = new byte[] { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F };
@@ -24,7 +21,6 @@ public static class PixelFont
         Glyphs['8'] = new byte[] { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E };
         Glyphs['9'] = new byte[] { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x11, 0x0E };
 
-        // Літери (лише верхній регістр для простоти)
         Glyphs['A'] = new byte[] { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
         Glyphs['B'] = new byte[] { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E };
         Glyphs['C'] = new byte[] { 0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E };
@@ -52,7 +48,6 @@ public static class PixelFont
         Glyphs['Y'] = new byte[] { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 };
         Glyphs['Z'] = new byte[] { 0x1F, 0x02, 0x04, 0x08, 0x10, 0x10, 0x1F };
 
-        // Спеціальні символи
         Glyphs[' '] = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
         Glyphs['.'] = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04 };
         Glyphs[','] = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x08 };
@@ -73,12 +68,11 @@ public static class PixelFont
     public static void DrawString(SpriteBatch sb, Texture2D pixel, string text, Vector2 position, Color color, int scale = 2)
     {
         Vector2 cursor = position;
-        text = text.ToUpper(); // Переводимо в верхній регістр
+        text = text.ToUpper();
 
         foreach (char c in text)
         {
             char lookupChar = c;
-            // Кирилицю для простоти мапимо на латиницю або виводимо пробіл
             if (!Glyphs.ContainsKey(lookupChar))
             {
                 lookupChar = ' ';
@@ -91,7 +85,6 @@ public static class PixelFont
                     byte row = rows[y];
                     for (int x = 0; x < 5; x++)
                     {
-                        // Зчитуємо біти зліва направо (з 4-го біта по 0-й)
                         if (((row >> (4 - x)) & 1) == 1)
                         {
                             sb.Draw(pixel, new Rectangle(
@@ -102,7 +95,7 @@ public static class PixelFont
                     }
                 }
             }
-            cursor.X += 6 * scale; // 5 пікселів символ + 1 піксель відступ
+            cursor.X += 6 * scale;
         }
     }
 }
